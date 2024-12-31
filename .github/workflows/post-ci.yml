@@ -9,6 +9,9 @@ name: Post Continuous Integration
 
 jobs:
   ci:
-    if: github.event.repository.owner.name == 'eips-wg'
+    if: github.event.workflow_run.repository.owner.login == 'eips-wg'
     uses: eips-wg/build/.github/workflows/post-ci.yml@master
     secrets: inherit
+    permissions:
+      issues: write
+      pull-requests: write
