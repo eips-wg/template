@@ -1,3 +1,6 @@
+# EIPs Build
+/build
+
 # JetBrains
 .idea/
 .idea_modules/
