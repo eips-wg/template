@@ -9,8 +9,76 @@ on:
       - ready_for_review
       - edited
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.repository }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  ci:
+  # Stores metadata about the pull request so that `post-ci.yml` can leave a
+  # useful comment on the pull request.
+  save-pr:
     if: github.event.pull_request.base.repo.owner.login == 'eips-wg'
-    uses: eips-wg/build/.github/workflows/ci.yml@master
-    secrets: inherit
+    name: Save Pull Request Metadata
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Build Artifact
+        env:
+          PR_NUMBER: ${{ github.event.number }}
+          PR_SHA: ${{ github.event.pull_request.head.sha }}
+          MERGE_SHA: ${{ github.sha }}
+        run: |
+          mkdir -p ./pr
+          echo $PR_NUMBER > ./pr/pr_number
+          echo $PR_SHA > ./pr/pr_sha
+          echo $MERGE_SHA > ./pr/merge_sha
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # 4.6.0
+        with:
+          name: pr_number
+          path: pr/
+
+  check:
+    if: github.event.pull_request.base.repo.owner.login == 'eips-wg'
+    name: Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # 4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: EIPs Build (Check)
+        uses: ./.github/actions/build-eips
+        with:
+          args: check --format github
+
+  markdownlint:
+    if: github.event.pull_request.base.repo.owner.login == 'eips-wg'
+    name: Markdown Linter
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # 4.2.2
+
+      - name: Get Changed Files
+        id: changed-files
+        uses: ./.github/actions/build-eips
+        with:
+          args: changed
+
+      - name: Checkout (Config)
+        if: steps.changed-files.outputs.stdout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # 4.2.2
+        with:
+          repository: eips-wg/theme
+          path: theme
+
+      - name: Markdown Lint
+        if: steps.changed-files.outputs.stdout
+        uses: DavidAnson/markdownlint-cli2-action@05f32210e84442804257b2a6f20b273450ec8265 # 19.1.0
+        with:
+          config: ./theme/config/config.markdownlint.yaml
+          globs: ${{ steps.changed-files.outputs.stdout }}

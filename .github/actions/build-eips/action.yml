@@ -1,0 +1,52 @@
+name: 'build-eips'
+
+description: 'Run the build-eips tool'
+
+inputs:
+  args:
+    description: 'Command-line arguments to pass to build-eips'
+    required: true
+
+outputs:
+  stdout:
+    description: 'Standard output from build-eips'
+    value: ${{ steps.run-build-eips.outputs.stdout }}
+
+runs:
+  using: "composite"
+  steps:
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3
+        with:
+          shared-key: build-eips
+
+      - name: Install build-eips
+        id: install-build-eips
+        shell: bash
+        run: |
+          WHERE="$(mktemp -d)"
+          (
+            cd "$WHERE";
+            wget https://github.com/eips-wg/preprocessor/releases/latest/download/build-eips-ubuntu.tar.xz;
+            tar xvf build-eips-ubuntu.tar.xz;
+          )
+          echo "bin=$WHERE/build-eips" >> "$GITHUB_OUTPUT"
+
+      - name: Install Zola
+        shell: bash
+        run: cargo install --locked --git https://github.com/getzola/zola.git --rev bcbcd1e7edfc4e011b0760aaaba965878144a7d3
+
+      - name: Run build-eips
+        id: run-build-eips
+        shell: bash
+        env:
+          BUILD_EIPS_ARGS: ${{ inputs.args }}
+          BUILD_EIPS: ${{ steps.install-build-eips.outputs.bin }}
+        run: |
+          set -euf -o pipefail
+          write_eof() {
+            echo -e "\nEOF" >> "$GITHUB_OUTPUT"
+          }
+          echo "stdout<<EOF" >> "$GITHUB_OUTPUT"
+          trap write_eof EXIT
+          "$BUILD_EIPS" $BUILD_EIPS_ARGS | awk '{ print; if ($0 == "EOF") exit 1 }' | tee -a "$GITHUB_OUTPUT"
