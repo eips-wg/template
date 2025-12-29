@@ -34,7 +34,7 @@ runs:
 
       - name: Install Zola
         shell: bash
-        run: cargo install --locked --git https://github.com/getzola/zola.git --rev bcbcd1e7edfc4e011b0760aaaba965878144a7d3
+        run: cargo install --locked --git https://github.com/getzola/zola.git --rev 45d3f8d6285f0b47013c5fa31eb405332118af8b
 
       - name: Run build-eips
         id: run-build-eips
