@@ -37,8 +37,8 @@ runs:
         id: install-zola
         run: |
           set -euf -o pipefail
-          ZOLA_VERSION="v0.21.0"
-          ZOLA_DIGEST="5c37a8f706567d6cad3f0dbc0eaebe3b9591cc301bd67089e5ddc0d0401732d6"
+          ZOLA_VERSION="v0.22.1"
+          ZOLA_DIGEST="0ca09aa40376aaa9ddfb512ff9ad963262ef95edb0d0f2d5ec6961b6f5cf22ef"
           WHERE="$(mktemp -d)"
           (
             cd "$WHERE";
