@@ -63,4 +63,4 @@ runs:
           echo "stdout<<EOF" >> "$GITHUB_OUTPUT"
           trap write_eof EXIT
           export PATH="${ZOLA_PATH}:${PATH}"
-          "$BUILD_EIPS" $BUILD_EIPS_ARGS | awk '{ print; if ($0 == "EOF") exit 1 }' | tee -a "$GITHUB_OUTPUT"
+          "$BUILD_EIPS" --staging $BUILD_EIPS_ARGS | awk '{ print; if ($0 == "EOF") exit 1 }' | tee -a "$GITHUB_OUTPUT"
