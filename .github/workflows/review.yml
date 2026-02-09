@@ -9,7 +9,7 @@ on:
 
 jobs:
   review:
-    if: github.event.repository.owner.login == 'eips-wg'
+    if: github.event.repository.owner.login == 'ethereum' || github.event.repository.owner.login == 'eips-wg'
     runs-on: ubuntu-latest
     name: Review
     steps:
