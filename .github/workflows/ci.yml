@@ -53,7 +53,7 @@ jobs:
       - name: EIPs Build (Check)
         uses: ./.github/actions/build-eips
         with:
-          args: check --format github
+          args: editorial build --against-upstream --format github
 
   markdownlint:
     if: github.event.pull_request.base.repo.owner.login == 'ethereum' || github.event.pull_request.base.repo.owner.login == 'eips-wg'
