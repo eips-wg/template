@@ -1,0 +1,239 @@
+#!/bin/sh
+
+set -eu
+
+say() {
+    printf '%s\n' "$*"
+}
+
+die() {
+    printf 'error: %s\n' "$*" >&2
+    exit 1
+}
+
+pick_writable_home_path_dir() {
+    old_ifs=$IFS
+    IFS=:
+    for dir in $PATH; do
+        [ -n "$dir" ] || continue
+        [ -d "$dir" ] || continue
+        [ -w "$dir" ] || continue
+        case "$dir" in
+            "$HOME"|"$HOME"/*)
+                printf '%s\n' "$dir"
+                IFS=$old_ifs
+                return 0
+                ;;
+        esac
+    done
+    IFS=$old_ifs
+    return 1
+}
+
+pick_writable_path_dir() {
+    old_ifs=$IFS
+    IFS=:
+    for dir in $PATH; do
+        [ -n "$dir" ] || continue
+        [ -d "$dir" ] || continue
+        [ -w "$dir" ] || continue
+        printf '%s\n' "$dir"
+        IFS=$old_ifs
+        return 0
+    done
+    IFS=$old_ifs
+    return 1
+}
+
+pick_install_dir() {
+    if [ -n "${HOME:-}" ]; then
+        if dir=$(pick_writable_home_path_dir); then
+            printf '%s\n' "$dir"
+            return 0
+        fi
+
+        dir=$HOME/.local/bin
+        mkdir -p "$dir"
+        if [ -w "$dir" ]; then
+            printf '%s\n' "$dir"
+            return 0
+        fi
+    fi
+
+    pick_writable_path_dir
+}
+
+download() {
+    url=$1
+    destination=$2
+
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$url" -o "$destination"
+        return 0
+    fi
+
+    if command -v wget >/dev/null 2>&1; then
+        wget -qO "$destination" "$url"
+        return 0
+    fi
+
+    die "need curl or wget to download release binaries"
+}
+
+ensure_install_dir() {
+    [ -n "${INSTALL_DIR:-}" ] && return 0
+
+    INSTALL_DIR=$(pick_install_dir) || die "could not find a writable install directory"
+    case ":$PATH:" in
+        *:"$INSTALL_DIR":*)
+            ;;
+        *)
+            PATH=$INSTALL_DIR:$PATH
+            PATH_NOTE=$INSTALL_DIR
+            ;;
+    esac
+}
+
+cleanup_tmpdir() {
+    if [ -n "${TMPDIR_TO_CLEAN:-}" ]; then
+        rm -rf "$TMPDIR_TO_CLEAN"
+        TMPDIR_TO_CLEAN=
+    fi
+}
+
+install_build_eips() {
+    case "$(uname -s)" in
+        Linux)
+            archive_name=build-eips-ubuntu.tar.xz
+            ;;
+        Darwin)
+            archive_name=build-eips-macos.tar.xz
+            ;;
+        *)
+            die "unsupported operating system for automatic build-eips installation"
+            ;;
+    esac
+
+    command -v tar >/dev/null 2>&1 || die "need tar to unpack the build-eips release archive"
+    ensure_install_dir
+
+    tmpdir=$(mktemp -d)
+    TMPDIR_TO_CLEAN=$tmpdir
+    trap cleanup_tmpdir EXIT INT TERM
+
+    archive_path=$tmpdir/$archive_name
+    release_url=https://github.com/eips-wg/preprocessor/releases/latest/download/$archive_name
+
+    say "Installing build-eips from $release_url"
+    download "$release_url" "$archive_path"
+    tar -xf "$archive_path" -C "$tmpdir"
+    [ -f "$tmpdir/build-eips" ] || die "release archive did not contain build-eips"
+
+    cp "$tmpdir/build-eips" "$INSTALL_DIR/build-eips"
+    chmod +x "$INSTALL_DIR/build-eips"
+
+    BUILD_EIPS=$INSTALL_DIR/build-eips
+    cleanup_tmpdir
+}
+
+just_target() {
+    case "$(uname -s)" in
+        Linux)
+            case "$(uname -m)" in
+                x86_64|amd64)
+                    printf '%s\n' x86_64-unknown-linux-musl
+                    ;;
+                aarch64|arm64)
+                    printf '%s\n' aarch64-unknown-linux-musl
+                    ;;
+                *)
+                    die "unsupported Linux architecture for automatic just installation"
+                    ;;
+            esac
+            ;;
+        Darwin)
+            case "$(uname -m)" in
+                x86_64|amd64)
+                    printf '%s\n' x86_64-apple-darwin
+                    ;;
+                aarch64|arm64)
+                    printf '%s\n' aarch64-apple-darwin
+                    ;;
+                *)
+                    die "unsupported macOS architecture for automatic just installation"
+                    ;;
+            esac
+            ;;
+        *)
+            die "unsupported operating system for automatic just installation"
+            ;;
+    esac
+}
+
+install_just() {
+    command -v tar >/dev/null 2>&1 || die "need tar to unpack the just release archive"
+    ensure_install_dir
+
+    tmpdir=$(mktemp -d)
+    TMPDIR_TO_CLEAN=$tmpdir
+    trap cleanup_tmpdir EXIT INT TERM
+
+    target=$(just_target)
+    metadata_path=$tmpdir/just-release.json
+    archive_path=$tmpdir/just.tar.gz
+
+    download https://api.github.com/repos/casey/just/releases/latest "$metadata_path"
+    release_url=$(
+        tr ',' '\n' < "$metadata_path" |
+            sed -n "s#.*\"browser_download_url\"[[:space:]]*:[[:space:]]*\"\\([^\"]*/just-[^\"]*-$target\\.tar\\.gz\\)\".*#\\1#p"
+    )
+    [ -n "$release_url" ] || die "could not determine the latest just release download URL"
+
+    say "Installing just from $release_url"
+    download "$release_url" "$archive_path"
+    tar -xf "$archive_path" -C "$tmpdir"
+    [ -f "$tmpdir/just" ] || die "just release archive did not contain the just binary"
+
+    cp "$tmpdir/just" "$INSTALL_DIR/just"
+    chmod +x "$INSTALL_DIR/just"
+    cleanup_tmpdir
+}
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+WORKSPACE_ROOT=$(CDPATH= cd -- "$REPO_ROOT/.." && pwd)
+INSTALL_DIR=
+PATH_NOTE=
+TMPDIR_TO_CLEAN=
+
+if command -v build-eips >/dev/null 2>&1; then
+    BUILD_EIPS=$(command -v build-eips)
+    say "Using existing build-eips at $BUILD_EIPS"
+else
+    install_build_eips
+fi
+
+if command -v just >/dev/null 2>&1; then
+    say "Using existing just at $(command -v just)"
+else
+    install_just
+fi
+
+say "Bootstrapping workspace at $WORKSPACE_ROOT"
+"$BUILD_EIPS" workspace init "$WORKSPACE_ROOT"
+"$BUILD_EIPS" workspace refresh
+
+say "Running workspace doctor"
+if ! "$BUILD_EIPS" workspace doctor; then
+    say "Workspace doctor reported issues above. Fix them before relying on the local daily workflow."
+fi
+
+say ""
+say "Next commands:"
+say "  cd $REPO_ROOT"
+if [ -n "$PATH_NOTE" ]; then
+    say "  export PATH=\"$PATH_NOTE:\$PATH\""
+fi
+say "  just serve"
+say "  just check"
+say "  build-eips workspace doctor"
