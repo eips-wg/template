@@ -1,0 +1,12 @@
+repo_id = "template"
+
+# Template has no distinct production deployment target yet; production and
+# staging collapse to the canonical eips-wg template repo until a production
+# target is named. Update this section if that changes.
+[production]
+repository = "https://github.com/eips-wg/template.git"
+base_url = "https://eips-wg.github.io/template/"
+
+[staging]
+repository = "https://github.com/eips-wg/template.git"
+base_url = "https://eips-wg.github.io/template/"
