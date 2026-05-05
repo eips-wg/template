@@ -1,0 +1,5 @@
+#!/bin/sh
+
+printf '%s\n' "error: raw template-repo local bootstrap is deferred pending future template support in build-eips." >&2
+printf '%s\n' "Use the active EIPs or ERCs repo with ./scripts/dev-setup for supported local workspace bootstrap today." >&2
+exit 1

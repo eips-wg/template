@@ -17,13 +17,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: EIPs Build (Build)
+      - name: Template Build (Build)
         uses: ./.github/actions/build-eips
         with:
-          # Disable eipw lints because there will never be any changed files
-          # between this checkout and `master` because, well, we just checked
-          # out `master`.
-          args: build --no-lint
+          args: build
 
       - name: Upload Artifact
         id: artifact
